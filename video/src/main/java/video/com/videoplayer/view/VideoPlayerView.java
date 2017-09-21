@@ -10,6 +10,7 @@ import android.os.Message;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.OrientationEventListener;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -31,7 +32,7 @@ import video.com.videoplayer.R;
  * Created by zxs 2017/9/17
  */
 
-public class VideoPlayerView extends FrameLayout implements View.OnClickListener, MediaPlayer.OnVideoSizeChangedListener,SurfaceHolder.Callback {
+public class VideoPlayerView extends FrameLayout implements MediaPlayer.OnVideoSizeChangedListener, SurfaceHolder.Callback {
     private static final int UPDATE_PROGRESS = 1;
     private static final int AUTO_HIDE_CONTROL_BAR = 2;
     private static final int AUTO_HIDE_CONTROL_BAR_TIME_COUNT = 5000;
@@ -55,6 +56,7 @@ public class VideoPlayerView extends FrameLayout implements View.OnClickListener
     private boolean isShowBar = true;
     private boolean isDragging;
     private boolean isShowBtn;
+    private OrientationEventListener mOrientationEventListener;
 
     public VideoPlayerView(Context context) {
         super(context);
@@ -86,17 +88,47 @@ public class VideoPlayerView extends FrameLayout implements View.OnClickListener
         mFullScreenPlay = (ImageView) findViewById(R.id.iv_full_screen_play);
         mBottomBar = (LinearLayout) findViewById(R.id.ll_bottom);
         surfaceHolder = mSurfaceView.getHolder();
-
-//        LayoutParams videoViewParam = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
-//        textureView.setLayoutParams(videoViewParam);
-        mClose.setOnClickListener(this);
-        mPlayOrPause.setOnClickListener(this);
-        mPhotoAlbum.setOnClickListener(this);
-        mFullScreenPlay.setOnClickListener(this);
-        mBottomBar.setOnClickListener(this);
         mRootView.setOnTouchListener(mOnTouchListener);
         mSeekBar.setOnSeekBarChangeListener(mSeekBarChangeListener);
+        initClick();
 
+    }
+
+    private void initClick() {
+        mClose.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mContext instanceof Activity) {
+                    ((Activity) mContext).finish();
+                }
+            }
+        });
+        mPlayOrPause.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mMediaPlayer.isPlaying()) {
+                    mMediaPlayer.pause();
+                    mPlayOrPause.setImageResource(R.mipmap.video_play_btn);
+                    mFullScreenPlay.setVisibility(View.GONE);
+                    handler.removeMessages(AUTO_HIDE_CONTROL_BAR);
+                } else {
+                    onPlay();
+                }
+            }
+        });
+
+        mFullScreenPlay.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onPlay();
+            }
+        });
+        mPhotoAlbum.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mListener.onPhotoAlbum();
+            }
+        });
     }
 
     private SeekBar.OnSeekBarChangeListener mSeekBarChangeListener = new SeekBar.OnSeekBarChangeListener() {
@@ -132,35 +164,6 @@ public class VideoPlayerView extends FrameLayout implements View.OnClickListener
     }
 
 
-
-    @Override
-    public void onClick(View v) {
-        switch (v.getId()) {
-            case R.id.iv_close:
-                if (mContext instanceof Activity) {
-                    ((Activity) mContext).finish();
-                }
-                break;
-            case R.id.iv_play_or_pause:
-                if (mMediaPlayer.isPlaying()) {
-                    mMediaPlayer.pause();
-                    mPlayOrPause.setImageResource(R.mipmap.video_play_btn);
-                    mFullScreenPlay.setVisibility(View.GONE);
-                    handler.removeMessages(AUTO_HIDE_CONTROL_BAR);
-                } else {
-                    onPlay();
-                }
-                break;
-            case R.id.iv_full_screen_play:
-                onPlay();
-                break;
-            case R.id.iv_photo_album:
-                mListener.onPhotoAlbum();
-                break;
-        }
-    }
-
-
     private void setProgress() {
         if (mMediaPlayer == null || !mMediaPlayer.isPlaying()) {
             return;
@@ -172,6 +175,11 @@ public class VideoPlayerView extends FrameLayout implements View.OnClickListener
         mCurrentTime.setText(formatTime(position));
     }
 
+    /**
+     * 拖动进度条时更新
+     *
+     * @param progress
+     */
     private void updateSeek(int progress) {
         int duration = mMediaPlayer.getDuration();
         mCurrentTime.setText(formatTime(progress));
@@ -259,6 +267,12 @@ public class VideoPlayerView extends FrameLayout implements View.OnClickListener
     };
 
 
+    /**
+     * 视频按等比例计算
+     *
+     * @param width
+     * @param height
+     */
     private void updateVideoSize(int width, int height) {
         int targetWidth = 0;
         int targetHeight = 0;
@@ -296,6 +310,13 @@ public class VideoPlayerView extends FrameLayout implements View.OnClickListener
             mMediaPlayer.setOnPreparedListener(mOnPrepared);
             mMediaPlayer.setOnCompletionListener(mOnCompletionListener);
             mMediaPlayer.setOnVideoSizeChangedListener(this);
+            mOrientationEventListener = new OrientationEventListener(mContext) {
+                @Override
+                public void onOrientationChanged(int orientation) {
+                    updateVideoSize(mMediaPlayer.getVideoWidth(), mMediaPlayer.getVideoHeight());
+                }
+            };
+            mOrientationEventListener.enable();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -340,12 +361,12 @@ public class VideoPlayerView extends FrameLayout implements View.OnClickListener
     }
 
 
+    /**
+     * @param url       要播放的url路径
+     * @param isShowBtn 是否展示头部与底部状态栏
+     */
     public void setVideo(String url, boolean isShowBtn) {
-        setVideoUri(Uri.parse(url), isShowBtn);
-    }
-
-    public void setVideoUri(Uri uri, boolean isShowBtn) {
-        mUri = uri;
+        mUri = Uri.parse(url);
         this.isShowBtn = isShowBtn;
         surfaceHolder.addCallback(this);
     }
@@ -354,6 +375,9 @@ public class VideoPlayerView extends FrameLayout implements View.OnClickListener
         if (mMediaPlayer != null) {
             mMediaPlayer.release();
             mMediaPlayer = null;
+        }
+        if (mOrientationEventListener != null) {
+            mOrientationEventListener.disable();
         }
     }
 

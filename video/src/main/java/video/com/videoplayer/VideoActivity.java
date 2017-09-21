@@ -8,7 +8,7 @@ import video.com.videoplayer.view.VideoPlayerView;
 
 
 /**
- * Created by zhangxiaoshuang on 2017/9/5.
+ * Created by zxs on 2017/9/5.
  */
 
 public class VideoActivity extends AppCompatActivity {
@@ -23,9 +23,7 @@ public class VideoActivity extends AppCompatActivity {
     }
 
     private void initView() {
-//        String url = "/sdcard/zxs/1504862289722.mp4";
         String url="android.resource://"+getPackageName()+"/"+R.raw.video;
-//        String url1="https://pan.baidu.com/play/video#video/path=%2FVID_20170913_160922.mp4&t=-1";
         videoPlayerView = (VideoPlayerView) findViewById(R.id.mp_video);
         videoPlayerView.setVideo(url, true);
         videoPlayerView.setVideoPlayerListener(new VideoPlayerView.VideoPlayerListener() {
